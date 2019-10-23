@@ -1,0 +1,32 @@
+<head>
+    <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' name='viewport'/>
+</head>
+<html>
+
+<body style="margin:0;">
+
+<div class="box" id="box1" style="height:100%;background-color: black">
+
+</div>
+
+</body>
+
+</html>
+<script src="js/jquery.min.js"></script>
+<script>
+    var socket;
+
+    function connect() {
+        socket = new WebSocket("ws://" + location.host + "/ws", "mouse");
+
+        socket.onclose = function (e) {
+            console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
+            setTimeout(function () {
+                connect();
+            }, 1000);
+        };
+    }
+
+    connect();
+</script>
+<script src="js/main.js"></script>
