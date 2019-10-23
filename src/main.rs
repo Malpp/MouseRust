@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use enigo::{Enigo, MouseButton, MouseControllable};
 use env_logger;
-use log::{info, warn};
+use log::{info, LevelFilter, warn};
 use rouille::{Response, websocket};
 use serial::SerialPort;
 use structopt::StructOpt;
@@ -36,7 +36,7 @@ static PORT: i32 = 8080;
 static PORT: i32 = 80;
 
 fn main() {
-    env_logger::init();
+    env_logger::builder().filter_level(LevelFilter::Info).init();
 
     let addr = format!("0.0.0.0:{}", PORT);
 
