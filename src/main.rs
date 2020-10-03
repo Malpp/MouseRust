@@ -1,25 +1,15 @@
 extern crate log;
-#[macro_use]
-extern crate rouille;
 extern crate serial;
 
-use std::{io, thread};
 use std::env;
-use std::fs::File;
 use std::path::Path;
-use std::time::Duration;
 
 use enigo::{Enigo, MouseButton, MouseControllable};
 use env_logger;
-use log::{info, LevelFilter, warn};
-use rouille::{Response, websocket};
-use serial::SerialPort;
-use structopt::StructOpt;
-
-#[derive(StructOpt)]
-struct Cli {
-    com_port: String,
-}
+use futures::{FutureExt, StreamExt};
+use log::{info, LevelFilter};
+use warp::Filter;
+use warp::ws::WebSocket;
 
 fn get_static_location() -> String {
     if cfg!(debug_assertions) {
@@ -35,102 +25,59 @@ static PORT: i32 = 8080;
 #[cfg(not(debug_assertions))]
 static PORT: i32 = 80;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::builder().filter_level(LevelFilter::Info).init();
 
     let addr = format!("0.0.0.0:{}", PORT);
 
     info!("Starting server at {}", addr);
 
-    rouille::start_server(addr, move |request| {
-        router!(request,
-            (GET) (/ws) => {ws(request)},
-            _ => index(request)
-        )
-    });
-}
-
-fn index(request: &rouille::Request) -> rouille::Response {
-    if request.url() == "/" {
-        let file = File::open(Path::new(&get_static_location()).join("index.html").to_str().unwrap());
-        return match file {
-            Result::Ok(val) => Response::from_file("text/html", val),
-            Result::Err(_) => rouille::Response::empty_404()
-        };
-    }
-
-    let response = rouille::match_assets(&request, &get_static_location());
-    if response.is_success() {
-        return response;
-    }
-
-    rouille::Response::empty_404()
-}
-
-fn ws(request: &rouille::Request) -> rouille::Response {
-    let (response, websocket) = try_or_400!(websocket::start(&request, Some("mouse")));
-
-    thread::spawn(move || {
-        let ws = websocket.recv().unwrap();
-        websocket_handling_thread(ws);
+    let ws = warp::path("ws").and(warp::ws()).map(|ws: warp::ws::Ws| {
+        ws.on_upgrade(move |socket| websocket_handling_thread(socket))
     });
 
-    response
+    let index = warp::path::end().and(warp::get()).and(warp::fs::dir(get_static_location()));
+
+    let routes = ws.or(warp::fs::dir(get_static_location()));
+
+    warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
 }
 
-fn websocket_handling_thread(mut websocket: websocket::Websocket) {
+async fn websocket_handling_thread(ws: WebSocket) {
     let mut controls = Enigo::new();
-    while let Some(message) = websocket.next() {
+    let (_, mut user_ws_rx) = ws.split();
+
+    while let Some(result) = user_ws_rx.next().await {
+        let msg = match result {
+            Ok(msg) => msg,
+            Err(e) => {
+                eprintln!("websocket error: {}", e);
+                break;
+            }
+        };
+
+        if !msg.is_text() {
+            continue;
+        }
+
+        let message = msg.to_str().unwrap();
         match message {
-            websocket::Message::Text(txt) => {
-                match txt.as_ref() {
-                    "click" => click(&mut controls),
-                    "rclick" => rclick(&mut controls),
-                    "screen" => screen(),
-                    _ => {
-                        let nums = txt.split_ascii_whitespace().into_iter().fold(vec![], |mut vec, num| {
-                            vec.push(num.parse::<f64>().unwrap());
-                            vec
-                        });
-                        match nums.len() {
-                            1 => scroll(nums[0], &mut controls),
-                            2 => move_mouse(nums[0], nums[1], &mut controls),
-                            _ => {}
-                        }
-                    }
+            "click" => click(&mut controls),
+            "rclick" => rclick(&mut controls),
+            _ => {
+                let nums = message.split_ascii_whitespace().into_iter().fold(vec![], |mut vec, num| {
+                    vec.push(num.parse::<f64>().unwrap());
+                    vec
+                });
+                match nums.len() {
+                    1 => scroll(nums[0], &mut controls),
+                    2 => move_mouse(nums[0], nums[1], &mut controls),
+                    _ => {}
                 }
             }
-            websocket::Message::Binary(_) => {}
-        }
+        };
     }
-}
-
-fn screen() {
-    let args = Cli::from_args();
-    let mut port = serial::open(args.com_port.as_str()).unwrap();
-
-    match send_close(&mut port) {
-        Ok(()) => { info!("Screen"); }
-        Err(e) => warn!("{:?}", e)
-    }
-}
-
-fn send_close<T: SerialPort>(port: &mut T) -> Result<(), io::Error> {
-    port.reconfigure(&|settings| {
-        settings.set_baud_rate(serial::Baud9600)?;
-        settings.set_char_size(serial::Bits8);
-        settings.set_parity(serial::ParityNone);
-        settings.set_stop_bits(serial::Stop1);
-        settings.set_flow_control(serial::FlowNone);
-        Ok(())
-    })?;
-
-    port.set_timeout(Duration::from_millis(100))?;
-
-    thread::sleep(Duration::from_millis(800));
-    port.write(b"a")?;
-
-    Ok(())
 }
 
 fn click(controls: &mut Enigo) {

@@ -7,9 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rouille = "3.0.0"
 serial = "0.4.0"
 enigo = "0.0.13"
 log = "0.4.8"
 env_logger = "0.7.1"
-structopt = "0.3.3"
+tokio = { version = "0.2.22", features = ["full"] }
+warp = "0.2.5"
+futures = "0.3.5"

@@ -17,7 +17,7 @@
     var socket;
 
     function connect() {
-        socket = new WebSocket("ws://" + location.host + "/ws", "mouse");
+        socket = new WebSocket("ws://" + location.host + "/ws");
 
         socket.onclose = function (e) {
             console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
