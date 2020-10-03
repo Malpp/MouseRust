@@ -5,11 +5,10 @@ use std::env;
 use std::path::Path;
 
 use enigo::{Enigo, MouseButton, MouseControllable};
-use env_logger;
 use futures::StreamExt;
 use log::{info, LevelFilter};
-use warp::Filter;
 use warp::ws::WebSocket;
+use warp::Filter;
 
 fn get_static_location() -> String {
     if cfg!(debug_assertions) {
@@ -20,26 +19,21 @@ fn get_static_location() -> String {
     }
 }
 
-#[cfg(debug_assertions)]
-static PORT: i32 = 8080;
-#[cfg(not(debug_assertions))]
-static PORT: i32 = 80;
-
 #[tokio::main]
 async fn main() {
     env_logger::builder().filter_level(LevelFilter::Info).init();
 
-    let addr = format!("0.0.0.0:{}", PORT);
+    let addr = format!("0.0.0.0:{}", 8420);
 
     info!("Starting server at {}", addr);
 
     let ws = warp::path("ws")
         .and(warp::ws())
-        .map(|ws: warp::ws::Ws| ws.on_upgrade(move |socket| websocket_handling_thread(socket)));
+        .map(|ws: warp::ws::Ws| ws.on_upgrade(websocket_handling_thread));
 
     let routes = ws.or(warp::fs::dir(get_static_location()));
 
-    warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 8420)).await;
 }
 
 async fn websocket_handling_thread(ws: WebSocket) {
@@ -62,16 +56,14 @@ async fn websocket_handling_thread(ws: WebSocket) {
         let message = msg.to_str().unwrap();
         match message {
             "click" => click(&mut controls),
-            "rclick" => rclick(&mut controls),
+            "rclick" => r_click(&mut controls),
             _ => {
-                let nums =
-                    message
-                        .split_ascii_whitespace()
-                        .into_iter()
-                        .fold(vec![], |mut vec, num| {
-                            vec.push(num.parse::<f64>().unwrap());
-                            vec
-                        });
+                let nums = message
+                    .split_ascii_whitespace()
+                    .fold(vec![], |mut vec, num| {
+                        vec.push(num.parse::<f64>().unwrap());
+                        vec
+                    });
                 match nums.len() {
                     1 => scroll(nums[0], &mut controls),
                     2 => move_mouse(nums[0], nums[1], &mut controls),
@@ -86,7 +78,7 @@ fn click(controls: &mut Enigo) {
     controls.mouse_click(MouseButton::Left);
 }
 
-fn rclick(controls: &mut Enigo) {
+fn r_click(controls: &mut Enigo) {
     controls.mouse_click(MouseButton::Right);
 }
 
