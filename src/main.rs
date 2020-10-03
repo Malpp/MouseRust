@@ -6,7 +6,7 @@ use std::path::Path;
 
 use enigo::{Enigo, MouseButton, MouseControllable};
 use env_logger;
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use log::{info, LevelFilter};
 use warp::Filter;
 use warp::ws::WebSocket;
@@ -33,11 +33,9 @@ async fn main() {
 
     info!("Starting server at {}", addr);
 
-    let ws = warp::path("ws").and(warp::ws()).map(|ws: warp::ws::Ws| {
-        ws.on_upgrade(move |socket| websocket_handling_thread(socket))
-    });
-
-    let index = warp::path::end().and(warp::get()).and(warp::fs::dir(get_static_location()));
+    let ws = warp::path("ws")
+        .and(warp::ws())
+        .map(|ws: warp::ws::Ws| ws.on_upgrade(move |socket| websocket_handling_thread(socket)));
 
     let routes = ws.or(warp::fs::dir(get_static_location()));
 
@@ -66,10 +64,14 @@ async fn websocket_handling_thread(ws: WebSocket) {
             "click" => click(&mut controls),
             "rclick" => rclick(&mut controls),
             _ => {
-                let nums = message.split_ascii_whitespace().into_iter().fold(vec![], |mut vec, num| {
-                    vec.push(num.parse::<f64>().unwrap());
-                    vec
-                });
+                let nums =
+                    message
+                        .split_ascii_whitespace()
+                        .into_iter()
+                        .fold(vec![], |mut vec, num| {
+                            vec.push(num.parse::<f64>().unwrap());
+                            vec
+                        });
                 match nums.len() {
                     1 => scroll(nums[0], &mut controls),
                     2 => move_mouse(nums[0], nums[1], &mut controls),
