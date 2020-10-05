@@ -41,17 +41,14 @@ jobs:
       - name: Build
         run: cargo build --verbose --release
 
-      - name: Create artifact directory
-        run: mkdir artifacts
-
-      - name: Create archive for Windows
-        run: 7z a -tzip ./artifacts/${{ env.RELEASE_BIN }}-windows-x86_64.zip ./target/release/${{ env.RELEASE_BIN }}.exe ${{ env.RELEASE_ADDS }}
+      - name: Create setup for Windows
+        run: iscc setup.iss
         if: matrix.os == 'windows-latest'
 
       # This will double-zip
       # See - https://github.com/actions/upload-artifact/issues/39
-      - uses: actions/upload-artifact@v1
-        name: Upload archive
+      - uses: actions/upload-artifact@v2
+        name: Upload setup
         with:
-          name: ${{ runner.os }}
-          path: artifacts/
+          name: installer
+          path: Output/mouse_rust_windows.exe

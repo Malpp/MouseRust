@@ -1,12 +1,11 @@
 extern crate log;
-extern crate serial;
 
 use std::env;
 use std::path::Path;
 
 use enigo::{Enigo, MouseButton, MouseControllable};
 use futures::StreamExt;
-use log::{info, LevelFilter};
+use log::{error, LevelFilter};
 use warp::ws::WebSocket;
 use warp::Filter;
 
@@ -23,10 +22,6 @@ fn get_static_location() -> String {
 async fn main() {
     env_logger::builder().filter_level(LevelFilter::Info).init();
 
-    let addr = format!("0.0.0.0:{}", 8420);
-
-    info!("Starting server at {}", addr);
-
     let ws = warp::path("ws")
         .and(warp::ws())
         .map(|ws: warp::ws::Ws| ws.on_upgrade(websocket_handling_thread));
@@ -38,13 +33,13 @@ async fn main() {
 
 async fn websocket_handling_thread(ws: WebSocket) {
     let mut controls = Enigo::new();
-    let (_, mut user_ws_rx) = ws.split();
+    let (user_ws_tx, mut user_ws_rx) = ws.split();
 
     while let Some(result) = user_ws_rx.next().await {
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                eprintln!("websocket error: {}", e);
+                error!("websocket error: {}", e);
                 break;
             }
         };
@@ -72,6 +67,13 @@ async fn websocket_handling_thread(ws: WebSocket) {
             }
         };
     }
+
+    user_ws_rx
+        .reunite(user_ws_tx)
+        .unwrap()
+        .close()
+        .await
+        .expect("Error while closing socket.");
 }
 
 fn click(controls: &mut Enigo) {
