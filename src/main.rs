@@ -1,13 +1,20 @@
+extern crate app_dirs2;
 extern crate log;
 
 use std::env;
 use std::path::Path;
 
+use app_dirs2::{app_root, AppDataType, AppInfo};
 use enigo::{Enigo, MouseButton, MouseControllable};
 use futures::StreamExt;
-use log::{error, LevelFilter};
+use log::error;
 use warp::ws::WebSocket;
 use warp::Filter;
+
+const APP_INFO: AppInfo = AppInfo {
+    name: "mouse_rust",
+    author: "Malp",
+};
 
 fn get_static_location() -> String {
     if cfg!(debug_assertions) {
@@ -18,9 +25,30 @@ fn get_static_location() -> String {
     }
 }
 
+fn setup_logging() -> Result<(), log::SetLoggerError> {
+    let colors = fern::colors::ColoredLevelConfig::default().info(fern::colors::Color::Green);
+    let log_file = app_root(AppDataType::UserConfig, &APP_INFO)
+        .expect("Unable to create log file.")
+        .join(format!("{}.log", chrono::Local::now().format("%Y-%m-%d")));
+    fern::Dispatch::new()
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.target(),
+                colors.color(record.level()),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(log_file).expect("Unable to open log file"))
+        .apply()
+}
+
 #[tokio::main]
 async fn main() {
-    env_logger::builder().filter_level(LevelFilter::Info).init();
+    setup_logging().expect("Unable to setup logging");
 
     let ws = warp::path("ws")
         .and(warp::ws())

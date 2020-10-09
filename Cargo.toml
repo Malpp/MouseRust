@@ -8,8 +8,10 @@ edition = "2018"
 
 [dependencies]
 enigo = "0.0.13"
+app_dirs2 = "2.3.0"
 log = "0.4.8"
-env_logger = "0.7.1"
+fern = { version = "0.6.0", features = ["colored"] }
+chrono = "0.4.19"
 tokio = { version = "0.2.22", features = ["full"] }
 warp = "0.2.5"
 futures = "0.3.5"
