@@ -33,22 +33,20 @@ jobs:
     steps:
       - uses: actions/checkout@v1
 
-      - name: Install Rust (rustup)
-        run: rustup update ${{ matrix.rust }} --no-self-update && rustup default ${{ matrix.rust }}
-        if: matrix.os != 'macos-latest'
-        shell: bash
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
 
-      - name: Build
-        run: cargo build --verbose --release
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --verbose
 
       - name: Create setup for Windows
         run: iscc setup.iss
         if: matrix.os == 'windows-latest'
 
-      # This will double-zip
-      # See - https://github.com/actions/upload-artifact/issues/39
-      - uses: actions/upload-artifact@v2
-        name: Upload setup
+      - uses: ncipollo/release-action@v1
         with:
-          name: installer
-          path: Output/mouse_rust_windows.exe
+          artifacts: "Output/mouse_rust_windows.exe"
+          token: ${{ secrets.GITHUB_TOKEN }}

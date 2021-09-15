@@ -1,5 +1,5 @@
+#![windows_subsystem = "windows"]
 extern crate app_dirs2;
-extern crate log;
 
 use std::env;
 use std::path::Path;
@@ -8,6 +8,8 @@ use app_dirs2::{app_root, AppDataType, AppInfo};
 use enigo::{Enigo, MouseButton, MouseControllable};
 use futures::StreamExt;
 use log::error;
+use nwd::NwgUi;
+use nwg::NativeUi;
 use warp::ws::WebSocket;
 use warp::Filter;
 
@@ -15,6 +17,37 @@ const APP_INFO: AppInfo = AppInfo {
     name: "mouse_rust",
     author: "Malp",
 };
+
+#[derive(Default, NwgUi)]
+pub struct SystemTray {
+    #[nwg_control]
+    window: nwg::MessageWindow,
+
+    #[nwg_resource(source_file: Some("cog.ico"))]
+    icon: nwg::Icon,
+
+    #[nwg_control(icon: Some(& data.icon), tip: Some("Mouse"))]
+    #[nwg_events(MousePressLeftUp: [SystemTray::show_menu], OnContextMenu: [SystemTray::show_menu])]
+    tray: nwg::TrayNotification,
+
+    #[nwg_control(parent: window, popup: true)]
+    tray_menu: nwg::Menu,
+
+    #[nwg_control(parent: tray_menu, text: "Exit")]
+    #[nwg_events(OnMenuItemSelected: [SystemTray::exit])]
+    tray_item3: nwg::MenuItem,
+}
+
+impl SystemTray {
+    fn show_menu(&self) {
+        let (x, y) = nwg::GlobalCursor::position();
+        self.tray_menu.popup(x, y);
+    }
+
+    fn exit(&self) {
+        nwg::stop_thread_dispatch();
+    }
+}
 
 fn get_static_location() -> String {
     if cfg!(debug_assertions) {
@@ -26,7 +59,6 @@ fn get_static_location() -> String {
 }
 
 fn setup_logging() -> Result<(), log::SetLoggerError> {
-    let colors = fern::colors::ColoredLevelConfig::default().info(fern::colors::Color::Green);
     let log_file = app_root(AppDataType::UserConfig, &APP_INFO)
         .expect("Unable to create log file.")
         .join(format!("{}.log", chrono::Local::now().format("%Y-%m-%d")));
@@ -36,7 +68,7 @@ fn setup_logging() -> Result<(), log::SetLoggerError> {
                 "[{} {} {}] {}",
                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
                 record.target(),
-                colors.color(record.level()),
+                record.level(),
                 message
             ))
         })
@@ -56,7 +88,11 @@ async fn main() {
 
     let routes = ws.or(warp::fs::dir(get_static_location()));
 
-    warp::serve(routes).run(([0, 0, 0, 0], 8420)).await;
+    tokio::spawn(warp::serve(routes).run(([0, 0, 0, 0], 8420)));
+
+    nwg::init().expect("Failed to init Native Windows GUI");
+    let _ui = SystemTray::build_ui(Default::default()).expect("Failed to build UI");
+    nwg::dispatch_thread_events();
 }
 
 async fn websocket_handling_thread(ws: WebSocket) {
